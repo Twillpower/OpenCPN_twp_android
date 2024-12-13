@@ -26,7 +26,7 @@ cd $builddir && rm -rf *
 
 cmake \
   -DCMAKE_BUILD_TYPE=Release \
-  -DOCPN_TARGET_TUPLE:STRING="Android-arm64;16;arm64"  \
+  -DOCPN_TARGET_TUPLE:STRING="Android-arm64;21;arm64"  \
   -DOCPN_BUILD_SAMPLE=ON \
   -Dtool_base="$HOME/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64"\
   ..
