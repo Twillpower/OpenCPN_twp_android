@@ -25,6 +25,7 @@ test -d $builddir || mkdir $builddir
 cd $builddir && rm -rf *
 
 ls $HOME/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64
+ls $HOME/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin
 
 cmake \
   -DCMAKE_BUILD_TYPE=Release \
