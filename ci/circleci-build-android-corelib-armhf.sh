@@ -34,6 +34,7 @@ cmake \
   -DOCPN_TARGET_TUPLE:STRING="Android-arm64;21;arm64"  \
   -DOCPN_BUILD_SAMPLE=ON \
   -Dtool_base="$HOME/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64"\
+  -DCMAKE_AR=$AR \
   ..
 
 make VERBOSE=1
