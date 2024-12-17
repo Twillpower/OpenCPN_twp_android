@@ -1367,6 +1367,9 @@ void OCPNPlatform::SetDefaultOptions(void) {
   //  Enable some default PlugIns, and their default options
 
   if (pConfig) {
+    pConfig->SetPath(_T ( "/PlugIns" ));
+    pConfig->Write(_T ( "CatalogExpert" ), true);
+
     pConfig->SetPath(_T ( "/PlugIns/libchartdldr_pi.so" ));
     pConfig->Write(_T ( "bEnabled" ), true);
 
