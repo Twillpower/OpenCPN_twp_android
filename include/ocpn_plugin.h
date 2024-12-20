@@ -62,10 +62,10 @@ class wxGLContext;
 
 //    This is the most modern API Version number
 //    It is expected that the API will remain downward compatible, meaning that
-//    PlugIns conforming to API Version less then the most modern will also
+//    PlugIns conforming to API Version less than the most modern will also
 //    be correctly supported.
 #define API_VERSION_MAJOR 1
-#define API_VERSION_MINOR 18
+#define API_VERSION_MINOR 19
 
 //    Fwd Definitions
 class wxFileConfig;
@@ -1828,11 +1828,9 @@ GetAttributes(DriverHandle handle);
 
 /* Writing to a specific driver  */
 /**
- * Send a non-NMEA2000 message.
- * port * using  a simple call.  The physical write operation will be queued,
- * and executed in order as bandwidth allows.
+ * Send a non-NMEA2000 message. The call is not blocking.
  * @param handle Obtained from GetActiveDrivers()
- * @param payload Message data, for eaxample a complete Nmea0183 message.
+ * @param payload Message data, for example a complete Nmea0183 message.
  *        From 1.19: if the handle "protocol" attribute is "internal" it is
  *        parsed as <id><space><message> where the id is used when listening/
  *        subscribing to message.
@@ -1874,11 +1872,17 @@ struct PluginMsgId {
   PluginMsgId(const std::string &s) : id(s) {};
 };
 
-/** Return listener for plugin messages received on the REST interface. */
+/**
+ *  Return listener for plugin messages, internal or received on the REST
+ *  interface.
+ */
 extern DECL_EXP std::shared_ptr<ObservableListener> GetListener(
     PluginMsgId id, wxEventType ev, wxEvtHandler *handler);
 
-/** Retrieve the string in a plugin message received on the REST insterface. */
+/**
+ *  Retrieve the string in a plugin message, internal or received on the
+ *  REST insterface.
+ */
 extern DECL_EXP std::string GetPluginMsgPayload(PluginMsgId id, ObservedEvt ev);
 
 //  Assorted GUI utility functions
@@ -1913,5 +1917,43 @@ extern DECL_EXP void EnableLightsDisplay(bool enable);
 extern DECL_EXP void EnableLightDescriptionsDisplay(bool enable);
 extern DECL_EXP void SetENCDisplayCategory(PI_DisCat cat);
 extern DECL_EXP void SetNavigationMode(PI_NavMode mode);
+
+extern DECL_EXP bool GetEnableLatLonGrid();
+extern DECL_EXP bool GetEnableChartOutlines();
+extern DECL_EXP bool GetEnableDepthUnitDisplay();
+extern DECL_EXP bool GetEnableAisTargetDisplay();
+extern DECL_EXP bool GetEnableTideStationsDisplay();
+extern DECL_EXP bool GetEnableCurrentStationsDisplay();
+extern DECL_EXP bool GetEnableENCTextDisplay();
+extern DECL_EXP bool GetEnableENCDepthSoundingsDisplay();
+extern DECL_EXP bool GetEnableBuoyLightLabelsDisplay();
+extern DECL_EXP bool GetEnableLightsDisplay();
+extern DECL_EXP bool GetEnableLightDescriptionsDisplay();
+extern DECL_EXP PI_DisCat GetENCDisplayCategory();
+extern DECL_EXP PI_NavMode GetNavigationMode();
+
+extern DECL_EXP bool GetEnableMUIBar();
+extern DECL_EXP bool GetEnableCompassGPSIcon();
+extern DECL_EXP bool GetEnableStatusBar();
+extern DECL_EXP bool GetEnableChartBar();
+extern DECL_EXP bool GetEnableMenu();
+
+extern DECL_EXP void CenterOnOwnship();
+extern DECL_EXP bool GetCenterOnOwnship();
+
+extern DECL_EXP void SetTrackingMode(bool enable);
+extern DECL_EXP bool GetTrackingMode();
+
+extern DECL_EXP void EnableLookaheadMode(bool enable);
+extern DECL_EXP bool GetEnableLookaheadMode();
+
+extern DECL_EXP void EnableTouchMode(bool enable);
+extern DECL_EXP bool GetTouchMode();
+
+extern DECL_EXP void SetAppColorScheme(PI_ColorScheme cs);
+extern DECL_EXP PI_ColorScheme GetAppColorScheme();
+
+extern "C" DECL_EXP void RequestWindowRefresh(wxWindow *win,
+                                              bool eraseBackground);
 
 #endif  //_PLUGIN_H_
