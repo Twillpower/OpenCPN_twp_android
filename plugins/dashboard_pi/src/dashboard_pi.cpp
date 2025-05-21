@@ -232,9 +232,9 @@ enum {
   ID_DBP_I_PITCH,
   ID_DBP_I_HEEL,
   ID_DBP_D_AWA_TWA,
-  ID_DBP_I_GPSLCL,
-  ID_DBP_I_CPULCL,
-  ID_DBP_I_SUNLCL,
+  ID_DBP_I_GPSLCL,  ///< GNSS Clock formatted in local time.
+  ID_DBP_I_CPULCL,  ///< Computer Clock formatted in local time.
+  ID_DBP_I_SUNLCL,  ///< Sunrise/Sunset time formatted in local time.
   ID_DBP_I_ALTI,
   ID_DBP_D_ALTI,
   ID_DBP_I_VMGW,
@@ -2384,138 +2384,125 @@ void dashboard_pi::HandleN2K_130306(ObservedEvt ev) {
   NMEA2000Id id_130306(130306);
   std::vector<uint8_t> v = GetN2000Payload(id_130306, ev);
 
-  // Get a uniqe ID to prioritize source(s)
-  unsigned char source_id = v.at(7);
-  char ss[4];
-  sprintf(ss, "%d", source_id);
-  std::string ident = std::string(ss);
-  std::string source = GetN2000Source(id_130306, ev);
-  source += ":" + ident;
+  // No source prioritization for 130306 because there are
+  // multiple variables that can come from different sources.
 
-  if (mPriWDN >= 1) {
-    if (mPriWDN == 1) {
-      if (source != prio130306) return;
-    } else {
-      prio130306 = source;
-    }
+  unsigned char SID;
+  double WindSpeed, WindAngle;
+  tN2kWindReference WindReference;
 
-    unsigned char SID;
-    double WindSpeed, WindAngle;
-    tN2kWindReference WindReference;
+  // Get wind data
+  if (ParseN2kPGN130306(v, SID, WindSpeed, WindAngle, WindReference)) {
+    if (!N2kIsNA(WindSpeed) && !N2kIsNA(WindAngle)) {
+      double wind_angle_degr = GEODESIC_RAD2DEG(WindAngle);
+      double wind_speed_kn = MS2KNOTS(WindSpeed);
+      bool sendTWA = false, sendTWS = false;
 
-    // Get wind data
-    if (ParseN2kPGN130306(v, SID, WindSpeed, WindAngle, WindReference)) {
-      if (!N2kIsNA(WindSpeed) && !N2kIsNA(WindAngle)) {
-        double m_twaangle, m_twaspeed_kn;
-        bool sendTrueWind = false;
-
-        switch (WindReference) {
-          case 0:  // N2kWind direction True North
-            if (mPriWDN >= 1) {
-              double m_twdT = GEODESIC_RAD2DEG(WindAngle);
-              SendSentenceToAllInstruments(OCPN_DBP_STC_TWD, m_twdT,
-                                           _T("\u00B0"));
-              mPriWDN = 1;
-              mWDN_Watchdog = no_nav_watchdog_timeout_ticks;
-            }
-            break;
-          case 1:  // N2kWind direction Magnetic North
-            if (mPriWDN >= 1) {
-              double m_twdT = GEODESIC_RAD2DEG(WindAngle);
-              // Make it true if variation is available
-              if (!std::isnan(mVar)) {
-                m_twdT = (m_twdT) + mVar;
-                if (m_twdT > 360.) {
-                  m_twdT -= 360;
-                } else if (m_twdT < 0.) {
-                  m_twdT += 360;
-                }
-              }
-              SendSentenceToAllInstruments(OCPN_DBP_STC_TWD, m_twdT,
-                                           _T("\u00B0"));
-              mPriWDN = 1;
-              mWDN_Watchdog = no_nav_watchdog_timeout_ticks;
-            }
-            break;
-          case 2:  // N2kWind_Apparent_centerline
-            if (mPriAWA >= 1) {
-              double m_awaangle, m_awaspeed_kn, calc_angle;
-              // Angle equals 0-360 degr
-              m_awaangle = GEODESIC_RAD2DEG(WindAngle);
-              calc_angle = m_awaangle;
-              wxString m_awaunit = _T("\u00B0R");
-              // Should be unit "L" and 0-180 to port
-              if (m_awaangle > 180.0) {
-                m_awaangle = 360.0 - m_awaangle;
-                m_awaunit = _T("\u00B0L");
-              }
-              SendSentenceToAllInstruments(OCPN_DBP_STC_AWA, m_awaangle,
-                                           m_awaunit);
-              // Speed
-              m_awaspeed_kn = MS2KNOTS(WindSpeed);
-              SendSentenceToAllInstruments(
-                  OCPN_DBP_STC_AWS,
-                  toUsrSpeed_Plugin(m_awaspeed_kn, g_iDashWindSpeedUnit),
-                  getUsrSpeedUnit_Plugin(g_iDashWindSpeedUnit));
-              mPriAWA = 1;
-              mMWVA_Watchdog = gps_watchdog_timeout_ticks;
-
-              // If not N2K true wind data are recently received calculate it.
-              if (mPriTWA != 1) {
-                // Wants -+ angle instead of "L"/"R"
-                if (calc_angle > 180) calc_angle -= 360.0;
-                CalculateAndUpdateTWDS(m_awaspeed_kn, calc_angle);
-                mPriTWA = 2;
-                mPriWDN = 2;
-                mMWVT_Watchdog = gps_watchdog_timeout_ticks;
-                mWDN_Watchdog = no_nav_watchdog_timeout_ticks;
-              }
-            }
-            break;
-          case 3:  // N2kWind_True_centerline_boat(ground)
-            if (mPriTWA >= 1 && g_bDBtrueWindGround) {
-              m_twaangle = GEODESIC_RAD2DEG(WindAngle);
-              m_twaspeed_kn = MS2KNOTS(WindSpeed);
-              sendTrueWind = true;
-            }
-            break;
-          case 4:  // N2kWind_True_Centerline__water
-            if (mPriTWA >= 1 && !g_bDBtrueWindGround) {
-              m_twaangle = GEODESIC_RAD2DEG(WindAngle);
-              m_twaspeed_kn = MS2KNOTS(WindSpeed);
-              sendTrueWind = true;
-            }
-            break;
-          case 6:  // N2kWind_Error
-            break;
-          case 7:  // N2kWind_Unavailable
-            break;
-          default:
-            break;
-        }
-
-        if (sendTrueWind) {
-          // Wind angle is 0-360 degr
-          wxString m_twaunit = _T("\u00B0R");
-          // Should be unit "L" and 0-180 to port
-          if (m_twaangle > 180.0) {
-            m_twaangle = 360.0 - m_twaangle;
-            m_twaunit = _T("\u00B0L");
+      switch (WindReference) {
+        case 0:  // N2kWind direction True North
+          if (mPriWDN >= 1) {
+            SendSentenceToAllInstruments(OCPN_DBP_STC_TWD, wind_angle_degr,
+                                         _T("\u00B0"));
+            mPriWDN = 1;
+            sendTWS = true;
+            mWDN_Watchdog = no_nav_watchdog_timeout_ticks;
           }
-          SendSentenceToAllInstruments(OCPN_DBP_STC_TWA, m_twaangle, m_twaunit);
-          // Wind speed
-          SendSentenceToAllInstruments(
-              OCPN_DBP_STC_TWS,
-              toUsrSpeed_Plugin(m_twaspeed_kn, g_iDashWindSpeedUnit),
-              getUsrSpeedUnit_Plugin(g_iDashWindSpeedUnit));
-          SendSentenceToAllInstruments(
-              OCPN_DBP_STC_TWS2,
-              toUsrSpeed_Plugin(m_twaspeed_kn, g_iDashWindSpeedUnit),
-              getUsrSpeedUnit_Plugin(g_iDashWindSpeedUnit));
-          mPriTWA = 1;
-          mPriWDN = 1;  // For source prio
-          mMWVT_Watchdog = gps_watchdog_timeout_ticks;
+          break;
+        case 1:  // N2kWind direction Magnetic North
+          if (mPriWDN >= 1) {
+            // Make it true if variation is available
+            if (!std::isnan(mVar)) {
+              wind_angle_degr += mVar;
+              if (wind_angle_degr > 360.) {
+                wind_angle_degr -= 360;
+              } else if (wind_angle_degr < 0.) {
+                wind_angle_degr += 360;
+              }
+            }
+            SendSentenceToAllInstruments(OCPN_DBP_STC_TWD, wind_angle_degr,
+                                         _T("\u00B0"));
+            mPriWDN = 1;
+            sendTWS = true;
+            mWDN_Watchdog = no_nav_watchdog_timeout_ticks;
+          }
+          break;
+        case 2:  // N2kWind_Apparent_centerline
+          if (mPriAWA >= 1) {
+            double calc_angle = wind_angle_degr;
+            // Angle equals 0-360 degr
+            wxString m_awaunit = _T("\u00B0R");
+            // Should be unit "L" and 0-180 to port
+            if (wind_angle_degr > 180.0) {
+              wind_angle_degr = 360.0 - wind_angle_degr;
+              m_awaunit = _T("\u00B0L");
+            }
+            SendSentenceToAllInstruments(OCPN_DBP_STC_AWA, wind_angle_degr,
+                                         m_awaunit);
+            // Speed
+            SendSentenceToAllInstruments(
+                OCPN_DBP_STC_AWS,
+                toUsrSpeed_Plugin(wind_speed_kn, g_iDashWindSpeedUnit),
+                getUsrSpeedUnit_Plugin(g_iDashWindSpeedUnit));
+            mPriAWA = 1;
+            mMWVA_Watchdog = gps_watchdog_timeout_ticks;
+
+            // If not N2K true wind data are recently received calculate it.
+            if (mPriTWA != 1) {
+              // Wants -+ angle instead of "L"/"R"
+              if (calc_angle > 180) calc_angle -= 360.0;
+              CalculateAndUpdateTWDS(wind_speed_kn, calc_angle);
+              mPriTWA = 2;
+              mPriWDN = 2;
+              mMWVT_Watchdog = gps_watchdog_timeout_ticks;
+              mWDN_Watchdog = no_nav_watchdog_timeout_ticks;
+            }
+          }
+          break;
+        case 3:  // N2kWind_True_centerline_boat(ground)
+          if (mPriTWA >= 1 && g_bDBtrueWindGround) {
+            sendTWA = true;
+            sendTWS = true;
+            mPriTWA = 1;
+          }
+          break;
+        case 4:  // N2kWind_True_Centerline__water
+          if (mPriTWA >= 1 && !g_bDBtrueWindGround) {
+            sendTWA = true;
+            sendTWS = true;
+            mPriTWA = 1;
+          }
+          break;
+        case 6:  // N2kWind_Error
+          break;
+        case 7:  // N2kWind_Unavailable
+          break;
+        default:
+          break;
+      }
+
+      if (sendTWA) {
+        // Wind angle is 0-360 degr
+        wxString m_twaunit = _T("\u00B0R");
+        // Should be unit "L" and 0-180 to port
+        if (wind_angle_degr > 180.0) {
+          wind_angle_degr = 360.0 - wind_angle_degr;
+          m_twaunit = _T("\u00B0L");
         }
+        SendSentenceToAllInstruments(OCPN_DBP_STC_TWA, wind_angle_degr,
+                                     m_twaunit);
+      }
+
+      // Wind speed
+      if (sendTWS) {
+        SendSentenceToAllInstruments(
+            OCPN_DBP_STC_TWS,
+            toUsrSpeed_Plugin(wind_speed_kn, g_iDashWindSpeedUnit),
+            getUsrSpeedUnit_Plugin(g_iDashWindSpeedUnit));
+        SendSentenceToAllInstruments(
+            OCPN_DBP_STC_TWS2,
+            toUsrSpeed_Plugin(wind_speed_kn, g_iDashWindSpeedUnit),
+            getUsrSpeedUnit_Plugin(g_iDashWindSpeedUnit));
+        mMWVT_Watchdog = gps_watchdog_timeout_ticks;
       }
     }
   }
@@ -3159,7 +3146,13 @@ void dashboard_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix) {
     }
   }
   if (mPriDateTime >= 6) {  // We prefer the GPS datetime
-    mUTCDateTime.Set(pfix.FixTime);
+    // If GNSS data is available, the value of pfix.FixTime is the GNSS time in
+    // UTC. If GNSS data is not available, the special value 0 is used to
+    // indicate that the time is not valid.
+    if (pfix.FixTime > 0)
+      mUTCDateTime.Set(pfix.FixTime);
+    else
+      mUTCDateTime = wxInvalidDateTime;
     if (mUTCDateTime.IsValid()) {
       mPriDateTime = 6;
       mUTCDateTime = mUTCDateTime.ToUTC();
@@ -3516,10 +3509,12 @@ bool dashboard_pi::LoadConfig(void) {
     g_pFontTitle = &g_FontTitle;
     pConf->Read(_T("FontTitle"), &config, TitleFont);
     LoadFont(&pDF, config);
+    wxFont DummyFontTitle = *pDF;
     pConf->Read(_T("ColorTitle"), &config, "#000000");
     wxColour DummyColor(config);
-    g_pUSFontTitle->SetChosenFont(*pDF);
+    g_pUSFontTitle->SetChosenFont(DummyFontTitle);
     g_pUSFontTitle->SetColour(DummyColor);
+
     g_FontTitle = *g_pUSFontTitle;
     g_FontTitle.SetChosenFont(g_pUSFontTitle->GetChosenFont().Scaled(scaler));
     g_USFontTitle = *g_pUSFontTitle;
@@ -3527,9 +3522,10 @@ bool dashboard_pi::LoadConfig(void) {
     g_pFontData = &g_FontData;
     pConf->Read(_T("FontData"), &config, DataFont);
     LoadFont(&pDF, config);
+    wxFont DummyFontData = *pDF;
     pConf->Read(_T("ColorData"), &config, "#000000");
     DummyColor.Set(config);
-    g_pUSFontData->SetChosenFont(*pDF);
+    g_pUSFontData->SetChosenFont(DummyFontData);
     g_pUSFontData->SetColour(DummyColor);
     g_FontData = *g_pUSFontData;
     g_FontData.SetChosenFont(g_pUSFontData->GetChosenFont().Scaled(scaler));
@@ -3555,9 +3551,10 @@ bool dashboard_pi::LoadConfig(void) {
     g_pFontLabel = &g_FontLabel;
     pConf->Read(_T("FontLabel"), &config, LabelFont);
     LoadFont(&pDF, config);
+    wxFont DummyFontLabel = *pDF;
     pConf->Read(_T("ColorLabel"), &config, "#000000");
     DummyColor.Set(config);
-    g_pUSFontLabel->SetChosenFont(*pDF);
+    g_pUSFontLabel->SetChosenFont(DummyFontLabel);
     g_pUSFontLabel->SetColour(DummyColor);
     g_FontLabel = *g_pUSFontLabel;
     g_FontLabel.SetChosenFont(g_pUSFontLabel->GetChosenFont().Scaled(scaler));
@@ -3566,9 +3563,10 @@ bool dashboard_pi::LoadConfig(void) {
     g_pFontSmall = &g_FontSmall;
     pConf->Read(_T("FontSmall"), &config, SmallFont);
     LoadFont(&pDF, config);
+    wxFont DummyFontSmall = *pDF;
     pConf->Read(_T("ColorSmall"), &config, "#000000");
     DummyColor.Set(config);
-    g_pUSFontSmall->SetChosenFont(*pDF);
+    g_pUSFontSmall->SetChosenFont(DummyFontSmall);
     g_pUSFontSmall->SetColour(DummyColor);
     g_FontSmall = *g_pUSFontSmall;
     g_FontSmall.SetChosenFont(g_pUSFontSmall->GetChosenFont().Scaled(scaler));
@@ -3672,10 +3670,11 @@ bool dashboard_pi::LoadConfig(void) {
               pConf->Read(wxString::Format(_T("InstTitleFont%d"), i + 1),
                           &config, TitleFont);
               LoadFont(&pDF, config);
+              wxFont DummyFontTitleA = *pDF;
               pConf->Read(wxString::Format(_T("InstTitleColor%d"), i + 1),
                           &config, "#000000");
               DummyColor.Set(config);
-              instp->m_USTitleFont.SetChosenFont(DummyFont);
+              instp->m_USTitleFont.SetChosenFont(DummyFontTitleA);
               instp->m_USTitleFont.SetColour(DummyColor);
               instp->m_TitleFont = instp->m_USTitleFont;
               instp->m_TitleFont.SetChosenFont(
@@ -3699,10 +3698,11 @@ bool dashboard_pi::LoadConfig(void) {
               pConf->Read(wxString::Format(_T("InstDataFont%d"), i + 1),
                           &config, DataFont);
               LoadFont(&pDF, config);
+              wxFont DummyFontDataA = *pDF;
               pConf->Read(wxString::Format(_T("InstDataColor%d"), i + 1),
                           &config, "#000000");
               DummyColor.Set(config);
-              instp->m_USDataFont.SetChosenFont(DummyFont);
+              instp->m_USDataFont.SetChosenFont(DummyFontDataA);
               instp->m_USDataFont.SetColour(DummyColor);
               instp->m_DataFont = instp->m_USDataFont;
               instp->m_DataFont.SetChosenFont(
@@ -3711,10 +3711,11 @@ bool dashboard_pi::LoadConfig(void) {
               pConf->Read(wxString::Format(_T("InstLabelFont%d"), i + 1),
                           &config, LabelFont);
               LoadFont(&pDF, config);
+              wxFont DummyFontLabelA = *pDF;
               pConf->Read(wxString::Format(_T("InstLabelColor%d"), i + 1),
                           &config, "#000000");
               DummyColor.Set(config);
-              instp->m_USLabelFont.SetChosenFont(DummyFont);
+              instp->m_USLabelFont.SetChosenFont(DummyFontLabelA);
               instp->m_USLabelFont.SetColour(DummyColor);
               instp->m_LabelFont = instp->m_USLabelFont;
               instp->m_LabelFont.SetChosenFont(
@@ -3723,10 +3724,11 @@ bool dashboard_pi::LoadConfig(void) {
               pConf->Read(wxString::Format(_T("InstSmallFont%d"), i + 1),
                           &config, SmallFont);
               LoadFont(&pDF, config);
+              wxFont DummyFontSmallA = *pDF;
               pConf->Read(wxString::Format(_T("InstSmallColor%d"), i + 1),
                           &config, "#000000");
               DummyColor.Set(config);
-              instp->m_USSmallFont.SetChosenFont(DummyFont);
+              instp->m_USSmallFont.SetChosenFont(DummyFontSmallA);
               instp->m_USSmallFont.SetColour(DummyColor);
               instp->m_SmallFont = instp->m_USSmallFont;
               instp->m_SmallFont.SetChosenFont(
@@ -4093,7 +4095,7 @@ DashboardPreferencesDialog::DashboardPreferencesDialog(
     : wxDialog(parent, id, _("Dashboard preferences"), wxDefaultPosition,
                wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
 #ifdef __WXQT__
-  wxFont *pF = OCPNGetFont(_T("Dialog"), 0);
+  wxFont *pF = OCPNGetFont(_("Dialog"));
   SetFont(*pF);
 #endif
 
@@ -4884,7 +4886,7 @@ void DashboardPreferencesDialog::OnInstrumentAdd(wxCommandEvent &event) {
   AddInstrumentDlg pdlg((wxWindow *)event.GetEventObject(), wxID_ANY);
 
 #ifdef __OCPN__ANDROID__
-  wxFont *pF = OCPNGetFont(_T("Dialog"), 0);
+  wxFont *pF = OCPNGetFont(_("Dialog"));
   pdlg.SetFont(*pF);
 
   wxSize esize;
@@ -5175,7 +5177,7 @@ AddInstrumentDlg::AddInstrumentDlg(wxWindow *pparent, wxWindowID id)
   m_pListCtrlInstruments->AssignImageList(imglist, wxIMAGE_LIST_SMALL);
   m_pListCtrlInstruments->InsertColumn(0, _("Instruments"));
 
-  wxFont *pF = OCPNGetFont(_T("Dialog"), 0);
+  wxFont *pF = OCPNGetFont(_("Dialog"));
   m_pListCtrlInstruments->SetFont(*pF);
 
 #ifdef __OCPN__ANDROID__
@@ -5545,7 +5547,7 @@ void DashboardWindow::OnContextMenu(wxContextMenuEvent &event) {
   wxMenu *contextMenu = new wxMenu();
 
 #ifdef __WXQT__
-  wxFont *pf = OCPNGetFont(_T("Menu"), 0);
+  wxFont *pf = OCPNGetFont(_("Menu"));
 
   // add stuff
   wxMenuItem *item1 =
@@ -6179,7 +6181,7 @@ bool OCPNFontButton::Create(wxWindow *parent, wxWindowID id,
 void OCPNFontButton::OnButtonClick(wxCommandEvent &WXUNUSED(ev)) {
   // update the wxFontData to be shown in the dialog
   m_data.SetInitialFont(m_selectedFont);
-  wxFont *pF = OCPNGetFont(_T("Dialog"), 0);
+  wxFont *pF = OCPNGetFont(_("Dialog"));
 
 #ifdef __WXGTK__
   // Use a smaller font picker dialog (ocpnGenericFontDialog) for small displays
@@ -6345,7 +6347,7 @@ EditDialog::EditDialog(wxWindow *parent, InstrumentProperties &Properties,
                                        wxDefaultPosition, wxDefaultSize);
   fgSizer2->Add(m_fontPicker6, 0, wxALL, 5);
 
-  m_staticText9 = new wxStaticText(this, wxID_ANY, _("Arrow 1 Colour :"),
+  m_staticText9 = new wxStaticText(this, wxID_ANY, _("Arrow 1 Color :"),
                                    wxDefaultPosition, wxDefaultSize, 0);
   m_staticText9->Wrap(-1);
   fgSizer2->Add(m_staticText9, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
@@ -6355,7 +6357,7 @@ EditDialog::EditDialog(wxWindow *parent, InstrumentProperties &Properties,
       wxDefaultSize, wxCLRP_DEFAULT_STYLE);
   fgSizer2->Add(m_colourPicker3, 0, wxALL, 5);
 
-  m_staticText10 = new wxStaticText(this, wxID_ANY, _("Arrow 2 Colour :"),
+  m_staticText10 = new wxStaticText(this, wxID_ANY, _("Arrow 2 Color :"),
                                     wxDefaultPosition, wxDefaultSize, 0);
   m_staticText10->Wrap(-1);
   fgSizer2->Add(m_staticText10, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);

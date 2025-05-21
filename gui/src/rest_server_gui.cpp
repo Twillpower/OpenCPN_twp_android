@@ -43,12 +43,11 @@
 #endif
 
 extern RouteManagerDialog* pRouteManagerDialog;
-extern MyFrame* gFrame;
 
 static wxDialog* DisplayDlg(const std::string& msg, const std::string& txt1) {
   auto dlg = new PINCreateDialog(
-      dynamic_cast<wxWindow*>(gFrame), wxID_ANY, _("OpenCPN Server Message"),
-      "", wxDefaultPosition, wxDefaultSize, SYMBOL_STG_STYLE);
+      wxTheApp->GetTopWindow(), wxID_ANY, _("OpenCPN Server Message"), "",
+      wxDefaultPosition, wxDefaultSize, SYMBOL_STG_STYLE);
   dlg->SetMessage(msg);
   dlg->SetText1Message(txt1);
   dlg->Show();
@@ -81,7 +80,7 @@ RestServerDlgCtx PINCreateDialog::GetDlgCtx() {
                                  const wxString& check1msg) {
     return RunAcceptObjectDlg(msg, check1msg);
   };
-  ctx.top_level_refresh = []() { dynamic_cast<wxWindow*>(gFrame)->Refresh(); };
+  ctx.top_level_refresh = []() { wxTheApp->GetTopWindow()->Refresh(); };
   return ctx;
 }
 
@@ -109,7 +108,7 @@ AcceptObjectDialog::AcceptObjectDialog(wxWindow* parent, wxWindowID id,
                                        const wxSize& size, long style,
                                        const wxString& msg1,
                                        const wxString& msg2) {
-  wxFont* pif = FontMgr::Get().GetFont(_T("Dialog"));
+  wxFont* pif = FontMgr::Get().GetFont(_("Dialog"));
   SetFont(*pif);
   m_checkbox1_msg = msg2;
   Create(parent, id, caption, hint, pos, size, style, msg1, msg2);
@@ -219,7 +218,7 @@ PINCreateDialog::PINCreateDialog(wxWindow* parent, wxWindowID id,
                                  const wxString& caption, const wxString& hint,
                                  const wxPoint& pos, const wxSize& size,
                                  long style) {
-  wxFont* pif = FontMgr::Get().GetFont(_T("Dialog"));
+  wxFont* pif = FontMgr::Get().GetFont(_("Dialog"));
   SetFont(*pif);
   Create(parent, id, caption, hint, pos, size, style);
 #ifdef __ANDROID__
@@ -238,8 +237,8 @@ PINCreateDialog::~PINCreateDialog() {
 wxDialog* PINCreateDialog::Initiate(const std::string& msg,
                                     const std::string& text1) {
   auto dlg = new PINCreateDialog(
-      dynamic_cast<wxWindow*>(gFrame), wxID_ANY, _("OpenCPN Server Message"),
-      "", wxDefaultPosition, wxDefaultSize, SYMBOL_STG_STYLE);
+      wxTheApp->GetTopWindow(), wxID_ANY, _("OpenCPN Server Message"), "",
+      wxDefaultPosition, wxDefaultSize, SYMBOL_STG_STYLE);
   dlg->SetMessage(msg);
   dlg->SetText1Message(text1);
   dlg->Show();

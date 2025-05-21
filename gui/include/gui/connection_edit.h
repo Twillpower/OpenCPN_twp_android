@@ -1,10 +1,4 @@
-/******************************************************************************
- *
- * Project:  OpenCPN
- * Purpose:
- * Author:   David Register
- *
- ***************************************************************************
+/**************************************************************************
  *   Copyright (C) 2022 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -24,6 +18,11 @@
  ***************************************************************************
  */
 
+/**
+ * \file
+ * Dialog and support code for editing a connection
+ */
+
 #ifndef _CONNECT_EDIT_H
 #define _CONNECT_EDIT_H
 
@@ -37,6 +36,7 @@
 #include "model/comm_util.h"
 
 #include "observable.h"
+#include "expand_icon.h"
 
 class options;
 class ConnectionParamsPanel;
@@ -57,8 +57,7 @@ public:
   const wxString DEFAULT_UDP_OUT_ADDRESS = "255.255.255.255";
 
   ConnectionEditDialog();
-  // ConnectionEditDialog(wxScrolledWindow *container, options *parent);
-  ConnectionEditDialog(options *parent, ConnectionsDialog *client);
+  ConnectionEditDialog(wxWindow *parent);
 
   ~ConnectionEditDialog();
 
@@ -100,6 +99,7 @@ public:
   void OnConnValChange(wxCommandEvent &event);
   void OnValChange(wxCommandEvent &event);
   void OnUploadFormatChange(wxCommandEvent &event);
+  void OnCollapsedToggle(bool collapsed);
   void OnShowGpsWindowCheckboxClick(wxCommandEvent &event);
   void EnableConnection(ConnectionParams *conn, bool value);
   void OnDiscoverButton(wxCommandEvent &event);
@@ -149,7 +149,7 @@ public:
   void ConnectControls();
 
   // private:
-  options *m_parent;
+  wxWindow *m_parent;
   wxScrolledWindow *m_scrolledwin;
 
   wxGridSizer *gSizerNetProps, *gSizerSerProps, *gSizerCanProps;
@@ -177,7 +177,7 @@ public:
   wxRadioButton *m_rbOIgnore, *m_rbTypeCAN;
   wxStaticText *m_stBTPairs, *m_stNetProto, *m_stNetAddr, *m_stNetPort;
   wxStaticText *m_stSerPort, *m_stSerBaudrate, *m_stSerProtocol;
-  wxStaticText *m_stPriority, *m_stFilterSec, *m_stPrecision;
+  wxStaticText *m_stFilterSec, *m_stPrecision;
   wxStaticText *m_stTalkerIdText;
   wxStaticText *m_stNetComment, *m_stSerialComment, *m_stCANSource,
       *m_stAuthToken;
@@ -211,8 +211,8 @@ public:
 
   // DECLARE_EVENT_TABLE()
 protected:
-  wxString MORE, LESS;
-  wxStaticText *m_more;
+  ExpandableIcon m_expandable_icon;
+  wxSizer *m_collapse_box;
 };
 
 class SentenceListDlg : public wxDialog {

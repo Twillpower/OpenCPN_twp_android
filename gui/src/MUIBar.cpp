@@ -83,6 +83,8 @@ double getValue(int animationType, double t);
 #define ID_SCALE_OK 8302
 #define ID_SCALECTRL 8303
 
+static inline void IgnoreRetval(size_t n) { (void)n; }
+
 class SetScaleDialog : public wxDialog {
   DECLARE_EVENT_TABLE()
 
@@ -489,7 +491,7 @@ ssfn_font_t* load_font(const char* filename) {
   gzread(g, fontdata, size);
   gzclose(g);
 #else
-  fread(fontdata, size, 1, f);
+  IgnoreRetval(fread(fontdata, size, 1, f));
   fclose(f);
 #endif
 
@@ -687,7 +689,8 @@ void MUITextButton::BuildBitmap() {
 
   if (m_ssfn_status != SSFN_OK) return;
 
-  int wbox, hbox;
+  int wbox = 0;
+  int hbox = 0;
   std::string t = m_text.ToStdString();
   ssfn_bbox(&ctx, (char*)t.c_str(), 0, &wbox, &hbox);
 
@@ -882,13 +885,13 @@ void MUIBar::OnScaleSelected(wxMouseEvent& event) {
       dScale = wxMax(dScale, 1000);
       double displayScaleNow = pcc->GetScaleValue();
       double factor = displayScaleNow / dScale;
-      pcc->DoZoomCanvas(factor, false);
+      pcc->ZoomCanvasSimple(factor);
 
       // Run the calculation again, to reduce roundoff error in large scale
       // jumps.
       displayScaleNow = pcc->GetScaleValue();
       factor = displayScaleNow / dScale;
-      pcc->DoZoomCanvas(factor, false);
+      pcc->ZoomCanvasSimple(factor);
     }
   }
 }

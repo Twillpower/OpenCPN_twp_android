@@ -52,6 +52,7 @@
 #include "model/logger.h"
 #include "model/multiplexer.h"
 #include "model/nav_object_database.h"
+#include "model/navobj_db.h"
 #include "model/own_ship.h"
 #include "model/plugin_loader.h"
 #include "model/routeman.h"
@@ -138,7 +139,7 @@ extern bool g_bSleep;
 androidUtilHandler *g_androidUtilHandler;
 extern wxDateTime g_start_time;
 extern RouteManagerDialog *pRouteManagerDialog;
-extern about *g_pAboutDlgLegacy;
+extern About *g_pAboutDlgLegacy;
 extern bool g_bFullscreen;
 extern OCPNPlatform *g_Platform;
 
@@ -157,9 +158,6 @@ extern int g_chart_zoom_modifier_raster;
 extern int g_NMEAAPBPrecision;
 
 extern wxString *pInit_Chart_Dir;
-extern bool g_bfilter_cogsog;
-extern int g_COGFilterSec;
-extern int g_SOGFilterSec;
 
 extern bool g_bDisplayGrid;
 
@@ -313,7 +311,6 @@ bool g_backEnabled;
 bool g_bFullscreenSave;
 bool s_optionsActive;
 
-extern int ShowNavWarning();
 extern bool g_btrackContinuous;
 extern wxString ChartListFileName;
 
@@ -938,12 +935,6 @@ void androidUtilHandler::OnScheduledEvent(wxCommandEvent &event) {
         //  Persist the config file, especially to capture the viewport
         //  location,scale etc.
         pConfig->UpdateSettings();
-
-        //  There may be unsaved objects at this point, and a navobj.xml.changes
-        //  restore file.
-        //  We commit the navobj deltas
-        //  No need to flush or recreate a new empty "changes" file
-        pConfig->UpdateNavObjOnly();
       }
 
       break;
@@ -3106,8 +3097,7 @@ wxString BuildAndroidSettingsString(void) {
   // Connections
 
   // Internal GPS.
-  for (size_t i = 0; i < TheConnectionParams()->Count(); i++) {
-    ConnectionParams *cp = TheConnectionParams()->Item(i);
+  for (auto &cp : TheConnectionParams()) {
     if (INTERNAL_GPS == cp->Type) {
       result += _T("prefb_internalGPS:");
       result += cp->bEnabled ? _T("1;") : _T("0;");
@@ -3358,8 +3348,7 @@ int androidApplySettingsString(wxString settings, ArrayOfCDI *pACDI) {
     ConnectionParams *pExistingParams = NULL;
     ConnectionParams *cp = NULL;
 
-    for (size_t i = 0; i < TheConnectionParams()->Count(); i++) {
-      ConnectionParams *xcp = TheConnectionParams()->Item(i);
+    for (auto &xcp : TheConnectionParams()) {
       if (INTERNAL_GPS == xcp->Type) {
         pExistingParams = xcp;
         cp = xcp;
@@ -3379,7 +3368,7 @@ int androidApplySettingsString(wxString settings, ArrayOfCDI *pACDI) {
       ConnectionParams *new_params = new ConnectionParams(sGPS);
 
       new_params->bEnabled = benable_InternalGPS;
-      TheConnectionParams()->Add(new_params);
+      TheConnectionParams().push_back(new_params);
       cp = new_params;
     }
 
@@ -3451,8 +3440,7 @@ int androidApplySettingsString(wxString settings, ArrayOfCDI *pACDI) {
 
         wxString target = AUSBNames[i] + _T("-") + extraString;
 
-        for (unsigned int j = 0; j < TheConnectionParams()->Count(); j++) {
-          ConnectionParams *xcp = TheConnectionParams()->Item(j);
+        for (auto &xcp : TheConnectionParams()) {
           wxLogMessage(_T("    Checking: ") + target + " .. " +
                        xcp->GetDSPort());
 
@@ -3488,7 +3476,7 @@ int androidApplySettingsString(wxString settings, ArrayOfCDI *pACDI) {
           ConnectionParams *new_params = new ConnectionParams(sSerial);
 
           new_params->bEnabled = true;
-          TheConnectionParams()->Add(new_params);
+          TheConnectionParams().push_back(new_params);
           cp = new_params;
           rr |= NEED_NEW_OPTIONS;
         }
@@ -4372,7 +4360,7 @@ int doAndroidPersistState() {
   }
 
   //    Deactivate the PlugIns, allowing them to save state
-  PluginLoader::getInstance()->DeactivateAllPlugIns();
+  PluginLoader::GetInstance()->DeactivateAllPlugIns();
 
   /*
    Automatically drop an anchorage waypoint, if enabled
@@ -4413,7 +4401,7 @@ int doAndroidPersistState() {
 
           // caveat: this is accurate only on the Equator
           if ((l * 60. * 1852.) < (.25 * 1852.)) {
-            pConfig->DeleteWayPoint(pr);
+            NavObj_dB::GetInstance().DeleteRoutePoint(pr);
             pSelect->DeleteSelectablePoint(pr, SELTYPE_ROUTEPOINT);
             delete pr;
             break;
@@ -4423,14 +4411,14 @@ int doAndroidPersistState() {
         node = node->GetNext();
       }
 
-      wxString name = now.Format();
+      wxString name = ocpn::toUsrDateTimeFormat(now);
       name.Prepend(_("Anchorage created "));
       RoutePoint *pWP =
           new RoutePoint(gLat, gLon, _T("anchorage"), name, _T(""));
       pWP->m_bShowName = false;
       pWP->m_bIsolatedMark = true;
 
-      pConfig->AddNewWayPoint(pWP, -1);  // use auto next num
+      NavObj_dB::GetInstance().InsertRoutePoint(pWP);
     }
   }
 
@@ -4460,14 +4448,6 @@ int doAndroidPersistState() {
   }
 
   pConfig->UpdateSettings();
-  pConfig->UpdateNavObj();
-
-  pConfig->m_pNavObjectChangesSet->reset();
-
-  // Remove any leftover Routes and Waypoints from config file as they were
-  // saved to navobj before
-  pConfig->DeleteGroup(_T ( "/Routes" ));
-  pConfig->DeleteGroup(_T ( "/Marks" ));
   pConfig->Flush();
 
   delete pConfig;  // All done
@@ -4482,7 +4462,7 @@ int doAndroidPersistState() {
 
   if (ChartData) ChartData->PurgeCachePlugins();
 
-  PluginLoader::getInstance()->UnLoadAllPlugIns();
+  PluginLoader::GetInstance()->UnLoadAllPlugIns();
   if (g_pi_manager) {
     delete g_pi_manager;
     g_pi_manager = NULL;
@@ -4600,7 +4580,7 @@ MigrateAssistantDialog::MigrateAssistantDialog(wxWindow *parent, bool bskipScan,
 
   m_statusTimer.SetOwner(this, MIGRATION_STATUS_TIMER);
 
-  wxFont *qFont = OCPNGetFont(_("Dialog"), 10);
+  wxFont *qFont = OCPNGetFont(_("Dialog"));
   SetFont(*qFont);
 
   CreateControls();
