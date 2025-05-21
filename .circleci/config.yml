@@ -34,9 +34,9 @@ jobs:
       - run: ci/generic-build-debian.sh
       - run: ci/generic-upload.sh
       - run:
-        name: Package build output
-        command: |
-          tar -czvf build.tar.gz -C ./build .
+          name: Package build output
+          command: |
+            tar -czvf build.tar.gz -C ./build .
       - store_artifacts:
           path: build.tar.gz
           destination: linux_build
@@ -58,9 +58,9 @@ jobs:
       - run: ci/generic-build-debian.sh
       - run: ci/generic-upload.sh
       - run:
-        name: Package build output
-        command: |
-          tar -czvf build.tar.gz -C ./build .
+          name: Package build output
+          command: |
+            tar -czvf build.tar.gz -C ./build .
       - store_artifacts:
           path: build.tar.gz
           destination: linux_build
@@ -102,9 +102,9 @@ jobs:
       - run: ci/circleci-build-android-corelib-armhf.sh
       - run: ci/generic-upload.sh
       - run:
-        name: Package build output
-        command: |
-          tar -czvf build.tar.gz -C ./build .
+          name: Package build output
+          command: |
+            tar -czvf build.tar.gz -C ./build .
       - store_artifacts:
           path: build.tar.gz
           destination: linux_build
