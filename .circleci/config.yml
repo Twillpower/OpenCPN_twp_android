@@ -33,8 +33,12 @@ jobs:
       - run: cat /etc/apt/sources.list
       - run: ci/generic-build-debian.sh
       - run: ci/generic-upload.sh
+      - run:
+        name: Package build output
+        command: |
+          tar -czvf build.tar.gz -C ./build .
       - store_artifacts:
-          path: ./build
+          path: build.tar.gz
           destination: linux_build
 
   build-jammy:
@@ -53,8 +57,12 @@ jobs:
       - run: cat /etc/apt/sources.list
       - run: ci/generic-build-debian.sh
       - run: ci/generic-upload.sh
+      - run:
+        name: Package build output
+        command: |
+          tar -czvf build.tar.gz -C ./build .
       - store_artifacts:
-          path: ./build
+          path: build.tar.gz
           destination: linux_build
 
   build-flatpak:
@@ -93,9 +101,13 @@ jobs:
       - checkout
       - run: ci/circleci-build-android-corelib-armhf.sh
       - run: ci/generic-upload.sh
+      - run:
+        name: Package build output
+        command: |
+          tar -czvf build.tar.gz -C ./build .
       - store_artifacts:
-          path: ./build
-          destination: android_build
+          path: build.tar.gz
+          destination: linux_build
       
 
   build-macos:
